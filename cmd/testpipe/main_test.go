@@ -567,4 +567,33 @@ jobs:
 			Eventually(session).Should(gexec.Exit(1))
 		})
 	})
+
+	Context("when jobs is misspelled", func() {
+		BeforeEach(func() {
+			pipelineConfig := fmt.Sprintf(`---
+jorbs:
+- name: some-job
+  plan:
+  - task: some-task
+`)
+
+			err := ioutil.WriteFile(pipelinePath, []byte(pipelineConfig), os.ModePerm)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("exits with error", func() {
+			session := RunTestpipeCommand(pipelinePath)
+
+			Eventually(session.Err).Should(gbytes.Say("no jobs in pipeline"))
+
+			Eventually(session).Should(gexec.Exit(1))
+		})
+	})
 })
+
+func RunTestpipeCommand(pipelinePath string) *gexec.Session {
+	cmd := exec.Command(cmdPath, "-p", pipelinePath)
+	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+	Expect(err).NotTo(HaveOccurred())
+	return session
+}

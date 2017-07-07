@@ -76,6 +76,10 @@ func (t *TestPipe) Run() error {
 		return fmt.Errorf("failed to unmarshal pipeline at %s: %s", t.path, err)
 	}
 
+	if len(config.Jobs) == 0 {
+		return fmt.Errorf("no jobs in pipeline: %s", config.Jobs)
+	}
+
 	for _, job := range config.Jobs {
 		var resources []string
 		var tasks []atc.PlanConfig
