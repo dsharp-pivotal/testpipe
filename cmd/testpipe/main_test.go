@@ -21,6 +21,7 @@ var _ = Describe("Main", func() {
 
 		configFilePath string
 		tmpDir         string
+		someResourceDir string
 	)
 
 	BeforeEach(func() {
@@ -42,7 +43,7 @@ jobs:
   - task: some-task
     config:
       run:
-        path: some-command
+        path: a-resource/some-command
 `
 
 		_, err = io.Copy(pipelineFile, strings.NewReader(pipelineConfig))
@@ -66,13 +67,14 @@ jobs:
 			resourcesDir, err := ioutil.TempDir(tmpDir, "resources")
 			Expect(err).NotTo(HaveOccurred())
 
-			someResourceDir := filepath.Join(resourcesDir, "some-resource")
+			someResourceDir = filepath.Join(resourcesDir, "some-resource")
 			err = os.MkdirAll(someResourceDir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
 			testpipeConfig := fmt.Sprintf(`---
 resource_map:
-  some-resource: %s`, someResourceDir)
+  some-resource: %s
+  fixture-resource: fixtures/fixture-resource`, someResourceDir)
 
 			testpipeConfigFile, err := ioutil.TempFile(tmpDir, "testpipe-config.yml")
 			Expect(err).NotTo(HaveOccurred())
@@ -91,7 +93,7 @@ inputs:
 params:
   some_param:
 run:
-  path: some-command
+  path: some-resource/scripts/executable.sh
 `
 
 			err = ioutil.WriteFile(taskPath, []byte(taskConfig), os.ModePerm)
@@ -102,6 +104,7 @@ jobs:
 - name: some-job
   plan:
   - get: some-resource
+  - get: fixture-resource
   - task: some-task
     params:
       some_param: A
@@ -118,6 +121,54 @@ jobs:
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(session).Should(gexec.Exit(0))
+		})
+
+		Context("when the script is not executable", func() {
+			BeforeEach(func() {
+				taskConfig := `---
+inputs:
+- name: fixture-resource
+params:
+  some_param:
+run:
+  path: fixture-resource/scripts/not_executable.sh
+`
+			taskPath := filepath.Join(someResourceDir, "task.yml")
+				err := ioutil.WriteFile(taskPath, []byte(taskConfig), os.ModePerm)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("checks that the script is executable", func() {
+				cmd := exec.Command(cmdPath, "-p", pipelinePath, "-c", configFilePath)
+				session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(session).Should(gexec.Exit(1))
+			})
+		})
+
+		Context("when the script is missing", func() {
+			BeforeEach(func() {
+				taskConfig := `---
+inputs:
+- name: fixture-resource
+params:
+  some_param:
+run:
+  path: fixture-resource/scripts/not_present.sh
+`
+			taskPath := filepath.Join(someResourceDir, "task.yml")
+				err := ioutil.WriteFile(taskPath, []byte(taskConfig), os.ModePerm)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("checks that the script is present", func() {
+				cmd := exec.Command(cmdPath, "-p", pipelinePath, "-c", configFilePath)
+				session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(session).Should(gexec.Exit(1))
+			})
 		})
 	})
 
@@ -410,7 +461,7 @@ jobs:
 			resourcesDir, err := ioutil.TempDir(tmpDir, "resources")
 			Expect(err).NotTo(HaveOccurred())
 
-			someResourceDir := filepath.Join(resourcesDir, "some-resource")
+			someResourceDir = filepath.Join(resourcesDir, "some-resource")
 			err = os.MkdirAll(someResourceDir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -466,7 +517,7 @@ jobs:
 			resourcesDir, err := ioutil.TempDir(tmpDir, "resources")
 			Expect(err).NotTo(HaveOccurred())
 
-			someResourceDir := filepath.Join(resourcesDir, "some-resource")
+			someResourceDir = filepath.Join(resourcesDir, "some-resource")
 			err = os.MkdirAll(someResourceDir, os.ModePerm)
 			Expect(err).NotTo(HaveOccurred())
 

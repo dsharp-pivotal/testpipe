@@ -119,6 +119,11 @@ func (t *TestPipe) Run() error {
 					return err
 				}
 
+				err = testExecutableTask(resources, canonicalTask, job.Name, t.path, t.tmpl, resourceMap)
+				if err != nil {
+					return err
+				}
+
 				tasks = append(tasks, *canonicalTask)
 
 				if canonicalTask.TaskConfig.Outputs != nil {
@@ -134,6 +139,28 @@ func (t *TestPipe) Run() error {
 		}
 	}
 
+	return nil
+}
+
+func testExecutableTask(
+	resources []string,
+	task *atc.PlanConfig,
+	jobName string,
+	pipelinePath string,
+	tmpl *template.Template,
+	resourceMap map[string]string,
+) error {
+	taskPathParts := strings.Split(task.TaskConfig.Run.Path, string(os.PathSeparator))
+	resource := taskPathParts[0]
+	resourcePath := resourceMap[resource]
+	fileInResource := filepath.Join(append([]string{resourcePath}, taskPathParts[1:]...)...)
+	fileInfo, err := os.Stat(fileInResource)
+	if err != nil {
+		return fmt.Errorf("Task run path not found: task path: %s, not found here: %s", task.TaskConfig.Run.Path, fileInResource)
+	}
+	if fileInfo.Mode().Perm()&0111 == 0 {
+		return fmt.Errorf("Task `path` exists but is not executable: task path: %s, found: %s", task.TaskConfig.Run.Path, fileInResource)
+	}
 	return nil
 }
 
@@ -278,7 +305,7 @@ func loadTask(
 	if resourcePath, ok := resourceMap[resourceRoot]; ok && resourcePath != "" {
 		path = filepath.Join(resourcePath, strings.Replace(task.TaskConfigPath, resourceRoot, "", -1))
 	} else {
-		return nil, fmt.Errorf("failed to find path for task: %s", task.TaskConfigPath)
+		return nil, fmt.Errorf("failed to find path for task: %s resourceRoot %s resourceMap %s", task.TaskConfigPath, resourceRoot, resourceMap)
 	}
 
 	bs, err := ioutil.ReadFile(path)
